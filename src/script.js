@@ -6,7 +6,7 @@ var mainContainer = document.getElementById('js-main-container'),
 console.log("SCRIPT")
 
 var spotifyPlayer = new SpotifyPlayer({
-  exchangeHost: 'http://localhost:5000'
+  exchangeHost: 'http://localhost:3000'
 });
 
 console.log(spotifyPlayer)
