@@ -3,6 +3,16 @@ var mainContainer = document.getElementById('js-main-container'),
     loginButton = document.getElementById('js-btn-login'),
     background = document.getElementById('js-background');
 
+
+
+
+
+var scopes = ['user-read-private', 'user-read-email'], state = 'some-state-of-my-choice';
+
+
+
+
+
 console.log("SCRIPT")
 
 var spotifyPlayer = new SpotifyPlayer({
@@ -43,6 +53,16 @@ spotifyPlayer.on('login', user => {
 });
 
 loginButton.addEventListener('click', () => {
-    console.log("login")
-    spotifyPlayer.login();
+    console.log('click');
+    const url = 'https://accounts.spotify.com/authorize';
+    var scope = 'user-read-private', state = 'some-state-of-my-choice';
+    const w = window.open(
+      url + 
+      '?response_type=code' +
+      '&client_id=' + process.env.CLIENT_ID +
+      '&scope=' + encodeURIComponent(scope) +
+      '&redirect_uri=' + encodeURIComponent(process.env.REDIRECT_URI)
+    )
+    
+
 });
