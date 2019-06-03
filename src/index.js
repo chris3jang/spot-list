@@ -11,6 +11,8 @@ var client_secret = process.env.CLIENT_SECRET; // Your secret
 var redirect_uri = process.env.REDIRECT_URI; // Your redirect uri
 console.log('process.env vars', client_id, client_secret, redirect_uri)
 
+const recentlyPlayedTracks = [];
+
 /**
  * Generates a random string containing numbers and letters
  * @param  {number} length The length of the string
@@ -55,6 +57,7 @@ app.get('/callback', function(req, res) {
 
   // your application requests refresh and access tokens
   // after checking the state parameter
+
 
   var code = req.query.code || null;
   var state = req.query.state || null;
@@ -141,22 +144,44 @@ app.get('/reclisthist', function(req, res) {
 
   console.log('req: ', req)
     var authOptions = {
-    url: 'https://api.spotify.com/v1/me/player/recently-played',
-    headers: { 'Authorization': 'Basic ' + req.query.accessToken },
-    /*
-    form: {
-        redirect_uri: redirect_uri,
-        grant_type: 'authorization_code'
-      },
-    */
-    //json: true
-  };
+    	url: 'https://api.spotify.com/v1/me/player/recently-played',
+    	headers: { 'Authorization': 'Bearer ' + req.query.accessToken },
+	};
 
   request.get(authOptions, function(error, response, body) {
-  	console.log('(*)', response)
+  	const myObject = JSON.parse(body);
+  	let artistNames = "";
+
+  	for(let i = 0; i < myObject.items.length; i++) {
+  		console.log(myObject.items[i])
+  		console.log("Track Name: ", myObject.items[i].track.name, '\n')
+  		console.log("Artists Names: ")
+  		for(let j = 0; j < myObject.items[i].track.artists.length; j++) {
+  			console.log(myObject.items[i].track.artists[j].name)
+  			artistNames += myObject.items[i].track.artists[j].name;
+  			if(j !== myObject.items[i].track.artists.length - 1) {
+  				artistNames += ', '
+  			}
+  		}
+  		console.log('\n')
+  		console.log("Album Name: ", myObject.items[i].track.album.name, '\n')
+  		console.log("Played At: ", myObject.items[i].played_at, '\n')
+  		recentlyPlayedTracks.push({
+  			trackName: myObject.items[i].track.name,
+  			artistNames: artistNames,
+  			albumName: myObject.items[i].track.album.name,
+  			playedAt: myObject.items[i].played_at
+  		})
+  		artistNames = "";
+  	}
+
+
+
+
     if (!error && response.statusCode === 200) {
-      console.log('(&)', res)
       res.send({
+      	'access_token': req.query.accessToken,
+      	'recently_played_tracks': recentlyPlayedTracks
       });
     }
   });
