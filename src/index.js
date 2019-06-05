@@ -6,27 +6,15 @@ var cookieParser = require('cookie-parser');
 
 require('dotenv').config()
 
+const { google } = require('googleapis');
+const googleAuth = require("../authentication");
+
 var client_id = process.env.CLIENT_ID; // Your client id
 var client_secret = process.env.CLIENT_SECRET; // Your secret
 var redirect_uri = process.env.REDIRECT_URI; // Your redirect uri
-console.log('process.env vars', client_id, client_secret, redirect_uri)
 
 const recentlyPlayedTracks = [];
-
-/**
- * Generates a random string containing numbers and letters
- * @param  {number} length The length of the string
- * @return {string} The generated string
- */
-var generateRandomString = function(length) {
-  var text = '';
-  var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-  for (var i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
-};
+const tracks = [];
 
 var stateKey = 'spotify_auth_state';
 
@@ -38,7 +26,16 @@ app.use(express.static(__dirname + '/public'))
 
 app.get('/login', function(req, res) {
 
-  var state = generateRandomString(16);
+  var state = (function(length) {
+    var text = '';
+    var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+    for (var i = 0; i < length; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+  })(16);
+
   res.cookie(stateKey, state);
 
   // your application requests authorization
@@ -140,40 +137,96 @@ app.get('/refresh_token', function(req, res) {
   });
 });
 
+function getData(auth) {
+  const sheets = google.sheets('v4');
+  sheets.spreadsheets.values.get({
+    auth: auth,
+    spreadsheetId: '1U7hzwjDcz80xN7PlrycszooWmMs1tKDkCS_TEUzxi6A',
+    range: 'Sheet1!A:D', //Change Sheet1 if your worksheet's name is something else
+  },(err, response) => {
+    if (err) {
+      console.log('The API returned an error: ' + err);
+      return;
+    }
+    var rows = response.data.values;
+    console.log('&*(', rows.length + 1)
+    return rows.length + 1;
+
+    /*
+    if (rows.length === 1) {
+      console.log('No data found.');
+    } else {
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        console.log(row.join(", "));
+      }
+    }
+    */
+  });
+}
+
 app.get('/reclisthist', function(req, res) {
 
-  console.log('req: ', req)
     var authOptions = {
     	url: 'https://api.spotify.com/v1/me/player/recently-played',
     	headers: { 'Authorization': 'Bearer ' + req.query.accessToken },
 	};
 
   request.get(authOptions, function(error, response, body) {
-  	const myObject = JSON.parse(body);
-  	let artistNames = "";
 
+    const myObject = JSON.parse(body);
+    let artistNames = "";
   	for(let i = 0; i < myObject.items.length; i++) {
-  		console.log(myObject.items[i])
-  		console.log("Track Name: ", myObject.items[i].track.name, '\n')
-  		console.log("Artists Names: ")
   		for(let j = 0; j < myObject.items[i].track.artists.length; j++) {
-  			console.log(myObject.items[i].track.artists[j].name)
   			artistNames += myObject.items[i].track.artists[j].name;
   			if(j !== myObject.items[i].track.artists.length - 1) {
   				artistNames += ', '
   			}
   		}
-  		console.log('\n')
-  		console.log("Album Name: ", myObject.items[i].track.album.name, '\n')
-  		console.log("Played At: ", myObject.items[i].played_at, '\n')
+
   		recentlyPlayedTracks.push({
   			trackName: myObject.items[i].track.name,
   			artistNames: artistNames,
   			albumName: myObject.items[i].track.album.name,
   			playedAt: myObject.items[i].played_at
   		})
+      tracks.push([myObject.items[i].track.name, artistNames, myObject.items[i].track.album.name, myObject.items[i].played_at]);
   		artistNames = "";
   	}
+
+    googleAuth.authenticate()
+    .then(auth => { 
+      const sheets = google.sheets('v4');
+      sheets.spreadsheets.values.get({
+        auth: auth,
+        spreadsheetId: '1U7hzwjDcz80xN7PlrycszooWmMs1tKDkCS_TEUzxi6A',
+        range: 'Sheet1!A:D', //Change Sheet1 if your worksheet's name is something else
+      },(err, response) => {
+        if (err) {
+          console.log('The API returned an error: ' + err);
+          return;
+        }
+        const startingRow = response.data.values.length + 1;
+        const sheets = google.sheets('v4');
+        const range = `Sheet1!A${startingRow.toString()}:B${startingRow.toString()}`
+        sheets.spreadsheets.values.append({
+          auth: auth,
+          spreadsheetId: '1U7hzwjDcz80xN7PlrycszooWmMs1tKDkCS_TEUzxi6A',
+          range: range, //Change Sheet1 if your worksheet's name is something else
+          valueInputOption: "USER_ENTERED",
+          resource: {
+            values: tracks
+          }
+        }, (err, response) => {
+          if (err) {
+            console.log('The API returned an error: ' + err);
+            return;
+          } else {
+              console.log("Appended");
+          }
+        })
+      })
+    })
 
 
 
