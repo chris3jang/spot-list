@@ -14,11 +14,41 @@ var client_secret = process.env.CLIENT_SECRET; // Your secret
 var redirect_uri = process.env.REDIRECT_URI; // Your redirect uri
 
 const recentlyPlayedTracks = [];
-const tracks = [];
+const tracksFromSpotAPI = [];
 
 var stateKey = 'spotify_auth_state';
 
 var app = express();
+
+function wasAppended(err, res) {
+  console.log('wasAppended')
+  if (err) {
+    console.log('The API returned an error: ' + err);
+    return;
+  } else {
+      console.log("Appended");
+  }
+}
+
+function writeToSheets(err, res) {
+  console.log('writeToSheets')
+  if(err) {
+    console.log('The API returned an error: ' + err);
+    return;
+  }
+  const startingRow = res.data.values.length + 1;
+  const sheets = google.sheets('v4');
+  const range = `Sheet1!A${startingRow.toString()}:B${startingRow.toString()}`
+  sheets.spreadsheets.values.append({
+    auth: auth,
+    spreadsheetId: '1U7hzwjDcz80xN7PlrycszooWmMs1tKDkCS_TEUzxi6A',
+    range: range, //Change Sheet1 if your worksheet's name is something else
+    valueInputOption: "USER_ENTERED",
+    resource: {
+      values: tracks
+    }
+  }, wasAppended)
+}
 
 app.use(express.static(__dirname + '/public'))
    .use(cors())
@@ -190,10 +220,10 @@ app.get('/reclisthist', function(req, res) {
   			albumName: myObject.items[i].track.album.name,
   			playedAt: myObject.items[i].played_at
   		})
-      tracks.push([myObject.items[i].track.name, artistNames, myObject.items[i].track.album.name, myObject.items[i].played_at]);
+      tracksFromSpotAPI.push([myObject.items[i].track.name, artistNames, myObject.items[i].track.album.name, myObject.items[i].played_at]);
   		artistNames = "";
   	}
-
+    
     googleAuth.authenticate()
     .then(auth => { 
       const sheets = google.sheets('v4');
@@ -206,6 +236,42 @@ app.get('/reclisthist', function(req, res) {
           console.log('The API returned an error: ' + err);
           return;
         }
+        console.log('^^^', response.data)
+        console.log('%%%', tracksFromSpotAPI)
+
+        function arraysEqual(arr1, arr2) {
+          console.log('arraysEqual')
+          if(arr1.length !== arr2.length)
+              return false;
+          for(var i = arr1.length; i--;) {
+              if(arr1[i] !== arr2[i])
+                  return false;
+          }
+          return true;
+        }
+
+        function compareTracks(arrone, arrtwo) {
+          console.log('compareTracks', arrone, arrtwo)
+          const result = [];
+          for(let i = 0; i < arrone.length; i++) {
+            console.log(i)
+            for(let j = 0; j < arrtwo.length; j++) {
+              if(arraysEqual(arrone[i], arrtwo[j])) {
+                result.push(i);
+              }
+            }
+          }
+          console.log('compareTracks result', result)
+          return result;
+        }
+
+        const idxsToRem = compareTracks(tracksFromSpotAPI, response.data.values).reverse();
+        console.log('#1', idxsToRem)
+        for(let i = 0; i < idxsToRem.length; i++) {
+          tracksFromSpotAPI.splice(idxsToRem[i], 1);
+        }
+        console.log('#2', tracksFromSpotAPI)
+
         const startingRow = response.data.values.length + 1;
         const sheets = google.sheets('v4');
         const range = `Sheet1!A${startingRow.toString()}:B${startingRow.toString()}`
@@ -215,7 +281,7 @@ app.get('/reclisthist', function(req, res) {
           range: range, //Change Sheet1 if your worksheet's name is something else
           valueInputOption: "USER_ENTERED",
           resource: {
-            values: tracks
+            values: tracksFromSpotAPI
           }
         }, (err, response) => {
           if (err) {
